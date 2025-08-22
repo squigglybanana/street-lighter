@@ -1,1 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Retro Duel</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- MAIN MENU -->
+  <div id="menu" class="menu-screen">
+    <div class="menu-card">
+      <div class="title-big">RETRO DUEL</div>
+      <div class="menu-buttons">
+        <button id="btnSingle" class="retro-btn">Single Player</button>
+        <button id="btnMulti"  class="retro-btn">Multiplayer</button>
+      </div>
+      <div class="credits-small">Use keyboard: P pause • R reset</div>
+    </div>
+  </div>
+
+  <!-- DIFFICULTY SCREEN -->
+  <div id="difficulty" class="menu-screen hidden">
+    <div class="menu-card">
+      <div class="title-big">Select Difficulty</div>
+      <div class="menu-buttons">
+        <button id="btnEasy" class="retro-btn">Easy</button>
+        <button id="btnHard" class="retro-btn">Hard</button>
+        <button id="btnBackFromDifficulty" class="retro-btn alt">Back</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME UI -->
+  <header id="gameUI" class="ui hidden">
+    <div class="title">RETRO DUEL</div>
+    <div class="center-row">
+      <button id="backToMenu" class="retro-btn alt">Menu</button>
+      <button id="restartBtn" class="retro-btn">Restart</button>
+    </div>
+    <div class="controls tiny">
+      <div><strong>P1</strong> — Move: A/D, Jump: W, Sword: F, Fireball: G, Dash: H</div>
+      <div><strong>P2</strong> — Move: ←/→, Jump: ↑, Sword: K, Fireball: L, Dash: ;</div>
+    </div>
+  </header>
+
+  <!-- HUD -->
+  <div id="hud" class="hud hidden">
+    <div class="hpbar p1"><span id="p1hp"></span></div>
+    <div class="timer" id="timer">60</div>
+    <div class="hpbar p2"><span id="p2hp"></span></div>
+  </div>
+
+  <main>
+    <canvas id="game" width="960" height="540"></canvas>
+    <div id="announcement" class="announcement hidden"></div>
+  </main>
+
+  <footer class="credits">Retro colors + chunky pixels = ❤️</footer>
+
+  <script src="game.js"></script>
+</body>
+</html>
 
