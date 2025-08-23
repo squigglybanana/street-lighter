@@ -70,7 +70,7 @@ const rand = (a,b) => a + Math.random()*(b-a);
 
 // Load character sprite
 const characterSprite = new Image();
-characterSprite.src = "https://raw.githubusercontent.com/your-username/your-repo/main/character.png"; 
+characterSprite.src = "https://github.com/squigglybanana/street-lighter/blob/main/character.png"; 
 // Replace with your actual GitHub URL
 
 // Particle
