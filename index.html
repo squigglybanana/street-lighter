@@ -1,4 +1,4 @@
-<!doctype html>
+<!doctype html> 
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -55,6 +55,37 @@
     <canvas id="game" width="960" height="540"></canvas>
     <div id="announcement" class="announcement hidden"></div>
   </main>
+
+  <!-- Hidden sprites (used in JS) -->
+  <img id="blueSprite" src="bluesprite.png" alt="Blue Sprite" style="display:none;" />
+  <!-- If you add another one later -->
+  <!-- <img id="redSprite" src="redsprite.png" alt="Red Sprite" style="display:none;" /> -->
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    // Grab sprites from HTML
+    const blueSprite = document.getElementById("blueSprite");
+    // const redSprite = document.getElementById("redSprite"); // for later
+
+    // Players
+    const player1 = { x: 100, y: 400, width: 80, height: 80, image: blueSprite };
+    const player2 = { x: 700, y: 400, width: 80, height: 80, image: blueSprite };
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw both players
+      ctx.drawImage(player1.image, player1.x, player1.y, player1.width, player1.height);
+      ctx.drawImage(player2.image, player2.x, player2.y, player2.width, player2.height);
+
+      requestAnimationFrame(draw);
+    }
+
+    draw();
+  </script>
+
   <script src="game.js"></script>
 </body>
 </html>
