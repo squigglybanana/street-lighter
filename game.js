@@ -247,214 +247,320 @@ class Fighter {
 
   draw(){
     // shadow
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
-    ctx.beginPath(); ctx.ellipse(this.center().x|0, (this.y+this.h+6)|0, 20, 6, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.35)";// ==== SETUP ====
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-    // sprite (mirror when facing left)
-    if (this.image && this.image.complete && this.image.naturalWidth){
-      const dw = this.w, dh = this.h;
-      if (this.facing === -1){
-        ctx.save();
-        ctx.translate(this.x + dw/2, this.y);
-        ctx.scale(-1, 1);
-        ctx.drawImage(this.image, 0, 0, this.image.naturalWidth, this.image.naturalHeight, -dw/2, 0, dw, dh);
-        ctx.restore();
-      } else {
-        ctx.drawImage(this.image, this.x, this.y, dw, dh);
-      }
+// UI elements
+const menu = document.getElementById("menu");
+const difficultyScreen = document.getElementById("difficulty");
+const gameUI = document.getElementById("gameUI");
+const hud = document.getElementById("hud");
+const announcement = document.getElementById("announcement");
+const p1hpBar = document.getElementById("p1hp");
+const p2hpBar = document.getElementById("p2hp");
+const timerEl = document.getElementById("timer");
+
+// Buttons
+const btnSingle = document.getElementById("btnSingle");
+const btnMulti = document.getElementById("btnMulti");
+const btnEasy = document.getElementById("btnEasy");
+const btnHard = document.getElementById("btnHard");
+const btnBackFromDifficulty = document.getElementById("btnBackFromDifficulty");
+const backToMenuBtn = document.getElementById("backToMenu");
+const restartBtn = document.getElementById("restartBtn");
+
+// Sprites from HTML
+const blueSprite = document.getElementById("blueSprite");
+// const redSprite = document.getElementById("redSprite"); // later if added
+
+// ==== GAME STATE ====
+let gameRunning = false;
+let gameTimer = 60;
+let gameInterval;
+let singlePlayer = false;
+let aiDifficulty = "easy";
+
+// ==== PLAYER CLASS ====
+class Player {
+  constructor(x, y, controls, sprite, flip=false, isAI=false) {
+    this.x = x;
+    this.y = y;
+    this.width = 80;
+    this.height = 80;
+    this.velX = 0;
+    this.velY = 0;
+    this.onGround = false;
+    this.hp = 100;
+    this.controls = controls;
+    this.sprite = sprite;
+    this.flip = flip;
+    this.isAI = isAI;
+    this.attackCooldown = 0;
+    this.projectiles = [];
+  }
+
+  draw() {
+    if (this.flip) {
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.drawImage(this.sprite, -this.x - this.width, this.y, this.width, this.height);
+      ctx.restore();
     } else {
-      // fallback body
-      ctx.fillStyle = "#000000"; ctx.fillRect(this.x, this.y, this.w, this.h);
-      ctx.fillStyle = this.color; ctx.fillRect(this.x+4, this.y+4, this.w-8, this.h-8);
-      ctx.fillStyle = "#fff"; ctx.fillRect(this.x+6, this.y+10, this.w-12, 6);
-      if (this.facing === 1) ctx.fillRect(this.x+this.w-6, this.y+22, 6,6); else ctx.fillRect(this.x, this.y+22, 6,6);
-      ctx.globalAlpha = 0.12; ctx.fillStyle = this.color; ctx.fillRect(this.x-2,this.y-2,this.w+4,this.h+4); ctx.globalAlpha = 1;
+      ctx.drawImage(this.sprite, this.x, this.y, this.width, this.height);
     }
 
-    // invul flash overlay
-    if (this.invul > 0) {
-      ctx.globalAlpha = 0.55; ctx.fillStyle = "#fff"; ctx.fillRect(this.x, this.y, this.w, this.h); ctx.globalAlpha = 1;
-    }
+    // Draw projectiles
+    ctx.fillStyle = "orange";
+    this.projectiles.forEach(fb => {
+      ctx.beginPath();
+      ctx.arc(fb.x, fb.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+    });
   }
-}
 
-// ===== global fighters =====
-let p1 = null, p2 = null;
+  update() {
+    // Gravity
+    this.velY += 0.5;
+    this.y += this.velY;
+    this.x += this.velX;
 
-// ===== helpers =====
-function burst(x,y,n,color,vx=0,vy=0,spread=1){
-  for (let i=0;i<n;i++) particles.push(new Particle(x,y, Math.cos(Math.random()*Math.PI*2)*rand(0.5,2.5)*spread + vx, Math.sin(Math.random()*Math.PI*2)*rand(0.5,2.5)*spread + vy, rand(0.15,0.6), color ));
-}
-function pressing(code){ if (Pressed.has(code)){ Pressed.delete(code); return true; } return false; }
-function overlap(a,b){ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+    // Floor
+    if (this.y + this.height > canvas.height - 20) {
+      this.y = canvas.height - this.height - 20;
+      this.velY = 0;
+      this.onGround = true;
+    } else {
+      this.onGround = false;
+    }
 
-// ===== reset / round handling =====
-function resetRound(){
-  roundTime = 60; roundOver = false; paused = false;
-  announce("");
-  if (!p1 || !p2) return;
-  p1.x = 200; p1.y = FLOOR.y - p1.h; p1.vx = p1.vy = 0; p1.hp = p1.maxHP; p1.stun = p1.hitstop = p1.invul = 0; p1.consecHits = 0; p1.comboTimer = 0; p1.facing = 1;
-  p2.x = W-260; p2.y = FLOOR.y - p2.h; p2.vx = p2.vy = 0; p2.hp = p2.maxHP; p2.stun = p2.hitstop = p2.invul = 0; p2.consecHits = 0; p2.comboTimer = 0; p2.facing = -1;
-  hitboxes.length = 0; particles.length = 0;
-  timerEl.textContent = roundTime;
-  updateHPBars();
-}
-function endRound(text){
-  if (roundOver) return;
-  roundOver = true;
-  announce(text);
-}
-function announce(text){
-  if (!text){ announceEl.classList.add("hidden"); announceEl.textContent=""; return; }
-  announceEl.textContent = text; announceEl.classList.remove("hidden");
-}
-function updateHPBars(){
-  if (!p1 || !p2) return;
-  p1hpEl.style.width = (100 * p1.hp / p1.maxHP) + "%";
-  p2hpEl.style.width = (100 * p2.hp / p2.maxHP) + "%";
-}
+    // Bounds
+    if (this.x < 0) this.x = 0;
+    if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
 
-// ===== safe UI bindings =====
-function bindUI(){
-  btnSingle.addEventListener("click", ()=>{ menuEl.classList.add("hidden"); diffEl.classList.remove("hidden"); });
-  btnMulti.addEventListener("click", ()=> startMatch("multi"));
-  btnEasy.addEventListener("click", ()=> startMatch("single","easy"));
-  btnHard.addEventListener("click", ()=> startMatch("single","hard"));
-  btnBackFromDifficulty.addEventListener("click", ()=>{ diffEl.classList.add("hidden"); menuEl.classList.remove("hidden"); });
-  backToMenu.addEventListener("click", ()=>{ menuEl.classList.remove("hidden"); diffEl.classList.add("hidden"); gameUI.classList.add("hidden"); hudEl.classList.add("hidden"); p1 = p2 = null; announce(""); roundOver = true; gameMode = "menu"; });
-  restartBtn.addEventListener("click", ()=>{ paused = false; resetRound(); });
-}
-if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", bindUI); else bindUI();
+    if (this.attackCooldown > 0) this.attackCooldown--;
 
-// ===== Start match (create fighters, show UI) =====
-function startMatch(mode, difficulty){
-  gameMode = mode;
-  aiDifficulty = difficulty;
-  menuEl.classList.add("hidden"); diffEl.classList.add("hidden"); gameUI.classList.remove("hidden"); hudEl.classList.remove("hidden");
+    // Fireballs
+    this.projectiles.forEach(fb => fb.x += fb.velX);
+    this.projectiles = this.projectiles.filter(fb => fb.x > 0 && fb.x < canvas.width);
+  }
 
-  p1 = new Fighter(200, COLORS.p1, { left:"KeyA", right:"KeyD", jump:"KeyW", sword:"KeyF", fire:"KeyG", dash:"KeyH" }, false);
-
-  if (mode === "multi")
-    p2 = new Fighter(W-260, COLORS.p2, { left:"ArrowLeft", right:"ArrowRight", jump:"ArrowUp", sword:"KeyK", fire:"KeyL", dash:"Semicolon" }, false);
-  else
-    p2 = new Fighter(W-260, COLORS.p2, {}, true);
-
-  // ensure both use the sprite reference (character.image)
-  p1.image = character.image;
-  p2.image = character.image;
-
-  resetRound();
-}
-
-// ===== main loop =====
-function step(ts){
-  const dt = Math.min(0.033, (ts-last)/1000 || 0);
-  last = ts;
-  if (paused) { requestAnimationFrame(step); return; }
-
-  // timer
-  acc += dt;
-  if (!roundOver && acc >= 1){
-    acc -= 1;
-    roundTime = Math.max(0, roundTime - 1);
-    timerEl.textContent = roundTime;
-    if (roundTime===0){
-      const t = p1.hp === p2.hp ? "Draw!" : (p1.hp > p2.hp ? "Time! Player 1 Wins!" : "Time! Player 2 Wins!");
-      endRound(t);
+  attack(opponent) {
+    if (this.attackCooldown === 0) {
+      this.attackCooldown = 30;
+      const hitbox = {
+        x: this.flip ? this.x - 30 : this.x + this.width,
+        y: this.y + 20,
+        w: 30, h: 40
+      };
+      if (rectCollision(hitbox, opponent)) opponent.hp -= 10;
     }
   }
 
-  // logic
-  if (!roundOver && p1 && p2){
-    // input & AI
-    if (p1) p1.input(p2);
-    if (p2) {
-      if (p2.isAI) p2.ai(p1, aiDifficulty);
-      else p2.input(p1);
-    }
-
-    p1.step(dt); p2.step(dt);
-
-    // hitboxes
-    for (const hb of hitboxes){
-      if (!hb.alive) continue;
-      hb.ttl -= dt;
-
-      if (hb.type === "fireball"){
-        hb.x += hb.vx; hb.y += hb.vy;
-        if (hb.y + hb.h > FLOOR.y || hb.x < 0 || hb.x + hb.w > W) hb.ttl = 0;
-        particles.push(new Particle(hb.x+hb.w/2, hb.y+hb.h/2, rand(-0.6,0.6), rand(-0.6,0.6), 0.12, Math.random()<0.5?COLORS.fire1:COLORS.fire2));
-      }
-
-      if (hb.ttl <= 0) hb.alive = false;
-
-      const target = hb.owner === p1 ? p2 : p1;
-      if (overlap(hb.rect(), target.rect)) {
-        target.takeHit(hb);
-        if (!hb.pierce) hb.alive = false;
-        updateHPBars();
-      }
-    }
-    for (let i=hitboxes.length-1;i>=0;i--) if (!hitboxes[i].alive) hitboxes.splice(i,1);
-    for (let i=particles.length-1;i>=0;i--) if (!particles[i].step(dt)) particles.splice(i,1);
-  }
-
-  // draw
-  ctx.clearRect(0,0,W,H);
-  drawBackground();
-
-  // ground
-  ctx.fillStyle = "#0b1035"; ctx.fillRect(0,FLOOR.y,W,FLOOR.height);
-  ctx.fillStyle = "#000"; ctx.fillRect(0,FLOOR.y+FLOOR.height,W,8);
-
-  // draw hitboxes (fireballs + melee arcs)
-  for (const hb of hitboxes){
-    if (!hb.alive) continue;
-    if (hb.type === "fireball"){
-      ctx.beginPath(); ctx.fillStyle = COLORS.fire1; ctx.ellipse(hb.x + hb.w/2, hb.y + hb.h/2, hb.w/2, hb.h/2, 0, 0, Math.PI*2); ctx.fill();
-      ctx.globalAlpha = 0.6; ctx.fillStyle = COLORS.fire2; ctx.fillRect(hb.x-4, hb.y-4, hb.w+8, hb.h+8); ctx.globalAlpha = 1;
-    } else if (hb.type === "melee"){
-      ctx.globalAlpha = 0.85; ctx.fillStyle = COLORS.sword; ctx.fillRect(hb.x, hb.y, hb.w, hb.h); ctx.globalAlpha = 1;
+  fireball() {
+    if (this.attackCooldown === 0) {
+      this.attackCooldown = 60;
+      const dir = this.flip ? -8 : 8;
+      this.projectiles.push({ x: this.x + this.width / 2, y: this.y + 40, velX: dir });
     }
   }
 
-  // fighters & particles
-  if (p1) p1.draw(); if (p2) p2.draw();
-  for (const p of particles) p.draw();
-
-  requestAnimationFrame(step);
+  dash() {
+    if (this.attackCooldown === 0) {
+      this.attackCooldown = 40;
+      this.velX = this.flip ? -15 : 15;
+    }
+  }
 }
 
-// ===== background =====
-function drawBackground(){
-  const stripes = 10;
-  for (let i=0;i<stripes;i++){
-    const t=i/(stripes-1);
-    const y = t*H*0.9 + 10;
-    ctx.fillStyle = `rgba(62,249,255,${0.05 + 0.05*Math.sin((performance.now()/600)+i)})`;
-    ctx.fillRect(0,y,W,4);
-  }
-  ctx.beginPath(); ctx.arc(W/2,160,80,0,Math.PI*2); ctx.fillStyle="#ff3ec9"; ctx.fill();
-  ctx.fillStyle="#10173a";
-  ctx.beginPath();
-  ctx.moveTo(0,H*0.7);
-  for(let x=0;x<=W;x+=32){
-    const y=H*0.7 - Math.abs(Math.sin(x*0.01))*40 - (x%64===0?30:0);
-    ctx.lineTo(x,y);
-  }
-  ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
-}
-
-// ===== input handling =====
-window.addEventListener("keydown",(e)=>{
-  if (e.repeat) return;
-  keys.add(e.code); Pressed.add(e.code);
-  if (e.code === "KeyP") paused = !paused;
-  if (e.code === "KeyR") { paused = false; resetRound(); }
+// ==== CONTROLS ====
+const keys = {};
+document.addEventListener("keydown", e => {
+  keys[e.key] = true;
+  if (e.key === "r") startGame(); // reset
+  if (e.key === "p") togglePause();
 });
-window.addEventListener("keyup",(e)=>{ keys.delete(e.code); });
+document.addEventListener("keyup", e => keys[e.key] = false);
 
-// ===== start =====
-requestAnimationFrame(step);
+const player1Controls = {
+  left: "a", right: "d", jump: "w",
+  attack: "f", fireball: "g", dash: "h"
+};
+const player2Controls = {
+  left: "ArrowLeft", right: "ArrowRight", jump: "ArrowUp",
+  attack: "k", fireball: "l", dash: ";"
+};
+
+let player1, player2;
+
+// ==== COLLISION ====
+function rectCollision(a, b) {
+  return (
+    a.x < b.x + b.width &&
+    a.x + (a.w || a.width) > b.x &&
+    a.y < b.y + b.height &&
+    a.y + (a.h || a.height) > b.y
+  );
+}
+
+// ==== GAME LOOP ====
+function update() {
+  // Controls for Player 1
+  if (keys[player1.controls.left]) player1.velX = -5;
+  else if (keys[player1.controls.right]) player1.velX = 5;
+  else player1.velX = 0;
+  if (keys[player1.controls.jump] && player1.onGround) player1.velY = -12;
+  if (keys[player1.controls.attack]) player1.attack(player2);
+  if (keys[player1.controls.fireball]) player1.fireball();
+  if (keys[player1.controls.dash]) player1.dash();
+
+  // Controls or AI for Player 2
+  if (!player2.isAI) {
+    if (keys[player2.controls.left]) player2.velX = -5;
+    else if (keys[player2.controls.right]) player2.velX = 5;
+    else player2.velX = 0;
+    if (keys[player2.controls.jump] && player2.onGround) player2.velY = -12;
+    if (keys[player2.controls.attack]) player2.attack(player1);
+    if (keys[player2.controls.fireball]) player2.fireball();
+    if (keys[player2.controls.dash]) player2.dash();
+  } else {
+    aiControl(player2, player1);
+  }
+
+  player1.update();
+  player2.update();
+
+  // Fireball hits
+  player1.projectiles.forEach(fb => {
+    if (rectCollision({ x: fb.x-4, y: fb.y-4, w: 8, h: 8 }, player2)) {
+      player2.hp -= 8;
+      fb.x = -999;
+    }
+  });
+  player2.projectiles.forEach(fb => {
+    if (rectCollision({ x: fb.x-4, y: fb.y-4, w: 8, h: 8 }, player1)) {
+      player1.hp -= 8;
+      fb.x = -999;
+    }
+  });
+
+  // HUD
+  p1hpBar.style.width = Math.max(player1.hp, 0) + "%";
+  p2hpBar.style.width = Math.max(player2.hp, 0) + "%";
+
+  if (player1.hp <= 0 || player2.hp <= 0) {
+    endGame(player1.hp <= 0 ? "Player 2 Wins!" : "Player 1 Wins!");
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+  player1.draw();
+  player2.draw();
+}
+
+function gameLoop() {
+  if (!gameRunning) return;
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// ==== TIMER ====
+function startTimer() {
+  gameTimer = 60;
+  timerEl.textContent = gameTimer;
+  gameInterval = setInterval(() => {
+    gameTimer--;
+    timerEl.textContent = gameTimer;
+    if (gameTimer <= 0) {
+      clearInterval(gameInterval);
+      if (player1.hp === player2.hp) endGame("Draw!");
+      else if (player1.hp > player2.hp) endGame("Player 1 Wins!");
+      else endGame("Player 2 Wins!");
+    }
+  }, 1000);
+}
+
+// ==== AI ====
+function aiControl(ai, opponent) {
+  ai.velX = 0;
+  if (aiDifficulty === "easy") {
+    if (Math.random() < 0.02) ai.attack(opponent);
+  } else {
+    if (opponent.x < ai.x) ai.velX = -3;
+    else ai.velX = 3;
+    if (Math.random() < 0.05) ai.attack(opponent);
+    if (Math.random() < 0.02) ai.fireball();
+  }
+}
+
+// ==== GAME STATE ====
+function startGame() {
+  hud.classList.remove("hidden");
+  gameUI.classList.remove("hidden");
+  menu.classList.add("hidden");
+  difficultyScreen.classList.add("hidden");
+  announcement.classList.add("hidden");
+
+  player1 = new Player(100, 400, player1Controls, blueSprite, false);
+  player2 = new Player(700, 400, player2Controls, blueSprite, true, singlePlayer);
+
+  player1.hp = 100;
+  player2.hp = 100;
+  gameRunning = true;
+  startTimer();
+  gameLoop();
+}
+
+function endGame(text) {
+  gameRunning = false;
+  clearInterval(gameInterval);
+  announcement.textContent = text;
+  announcement.classList.remove("hidden");
+}
+
+function resetGame() {
+  endGame("");
+  startGame();
+}
+
+function togglePause() {
+  gameRunning = !gameRunning;
+  if (gameRunning) gameLoop();
+}
+
+// ==== MENU BUTTONS ====
+btnSingle.addEventListener("click", () => {
+  singlePlayer = true;
+  menu.classList.add("hidden");
+  difficultyScreen.classList.remove("hidden");
+});
+btnMulti.addEventListener("click", () => {
+  singlePlayer = false;
+  startGame();
+});
+btnEasy.addEventListener("click", () => {
+  aiDifficulty = "easy";
+  startGame();
+});
+btnHard.addEventListener("click", () => {
+  aiDifficulty = "hard";
+  startGame();
+});
+btnBackFromDifficulty.addEventListener("click", () => {
+  difficultyScreen.classList.add("hidden");
+  menu.classList.remove("hidden");
+});
+backToMenuBtn.addEventListener("click", () => {
+  gameRunning = false;
+  clearInterval(gameInterval);
+  hud.classList.add("hidden");
+  gameUI.classList.add("hidden");
+  menu.classList.remove("hidden");
+});
+restartBtn.addEventListener("click", resetGame);
 
 
